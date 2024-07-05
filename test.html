@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣歷史地圖 - 互動式時間軸</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .timeline {
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 20px;
+        }
+        .timeline-item {
+            cursor: pointer;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        .timeline-item.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #map-container {
+            width: 800px;
+            height: 500px;
+            border: 1px solid #ccc;
+        }
+        #info {
+            width: 600px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-4">台灣歷史地圖</h1>
+        <div class="mb-4">
+            <button id="modeToggle" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                切換到時間軸模式
+            </button>
+        </div>
+        <div id="timelineContainer" class="timeline hidden">
+            <div class="timeline-item active" data-year="2024">2024年</div>
+            <div class="timeline-item active" data-year="2026">2026年</div>
+            <!-- 未來可以在這裡添加更多年份 -->
+        </div>
+        <div class="flex flex-col md:flex-row">
+            <div id="map-container" class="w-full md:w-2/3 h-96 md:h-[600px] border border-gray-300 mb-4 md:mb-0"></div>
+            <div id="info" class="w-full md:w-1/3 md:ml-4 bg-white p-4 rounded-lg shadow-md overflow-y-auto h-96 md:h-[600px]">
+                <h2 class="text-xl font-semibold mb-2">點擊地圖上的標記查看詳情</h2>
+                <div id="content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key="></script>
+    <script src="test.js"></script>
+    <script>
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map-container'), {
+                center: { lat: 24.1477, lng: 120.6736 },
+                zoom: 8
+            });
+
+            for (let id in locations) {
+                const location = locations[id];
+                const marker = new google.maps.Marker({
+                    position: location.position,
+                    map: map,
+                    title: location.title,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 5,
+                        fillColor: location.color,
+                        fillOpacity: 1,
+                        strokeWeight: 0
+                    }
+                });
+
+                marker.addListener('click', () => {
+                    selectedLocationId = id;
+                    showInfo(id);
+                });
+                location.marker = marker;
+            }
+        }
+
+        function showInfo(id) {
+            const location = locations[id];
+            const content = document.getElementById('content');
+        
+            content.innerHTML = `<h3 class="text-lg font-semibold mb-2">${location.title}</h3>`;
+        
+            if (isTimelineMode) {
+                let hasData = false;
+                for (let date in location.content) {
+                    if (date.startsWith(currentYear)) {
+                        const dateData = location.content[date];
+                        content.innerHTML += `
+                            <h4 class="text-md font-semibold mt-4 mb-2">${date}</h4>
+                            <p class="mb-2">${dateData.description}</p>
+                            <div class="grid grid-cols-2 gap-2 mb-4">
+                                ${dateData.images.map(img => `<img src="${img}" alt="${location.title}" class="w-full h-auto rounded">`).join('')}
+                            </div>
+                        `;
+                        hasData = true;
+                    }
+                }
+                if (!hasData) {
+                    content.innerHTML += `<p class="mb-2">該地點在${currentYear}年沒有資料。</p>`;
+                }
+            } else {
+                for (let date in location.content) {
+                    const dateData = location.content[date];
+                    content.innerHTML += `
+                        <h4 class="text-md font-semibold mt-4 mb-2">${date}</h4>
+                        <p class="mb-2">${dateData.description}</p>
+                        <div class="grid grid-cols-2 gap-2 mb-4">
+                            ${dateData.images.map(img => `<img src="${img}" alt="${location.title}" class="w-full h-auto rounded">`).join('')}
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        
+        
+
+        function setYear(year) {
+            currentYear = year;
+            document.querySelectorAll('.timeline-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.year === year) {
+                    item.classList.add('active');
+                }
+            });
+            updateMap();
+            if (selectedLocationId) {
+                showInfo(selectedLocationId);
+            }
+        }
+        
+        function updateMap() {
+            for (let id in locations) {
+                const location = locations[id];
+                let yearColor = location.color;
+                if (location.content[currentYear]) {
+                    yearColor = location.content[currentYear].color;
+                }
+                location.marker.setIcon({
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 5,
+                    fillColor: yearColor,
+                    fillOpacity: 1,
+                    strokeWeight: 0
+                });
+                location.marker.setVisible(true);
+            }
+        }
+
+        function toggleMode() {
+            isTimelineMode = !isTimelineMode;
+            const timelineContainer = document.getElementById('timelineContainer');
+            const modeToggle = document.getElementById('modeToggle');
+            const timelineItems = document.querySelectorAll('.timeline-item');
+        
+            if (isTimelineMode) {
+                timelineContainer.classList.remove('hidden');
+                modeToggle.textContent = '切換到全時間模式';
+                setYear(currentYear);
+                timelineItems.forEach(item => {
+                    item.style.display = 'inline-block';
+                });
+            } else {
+                timelineContainer.classList.add('hidden');
+                modeToggle.textContent = '切換到時間軸模式';
+                timelineItems.forEach(item => {
+                    item.style.display = 'none';
+                });
+                for (let id in locations) {
+                    const location = locations[id];
+                    location.marker.setIcon({
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 5,
+                        fillColor: location.color,
+                        fillOpacity: 1,
+                        strokeWeight: 0
+                    });
+                    location.marker.setVisible(true);
+                }
+            }
+        
+            // 更新顯示的內容
+            if (selectedLocationId) {
+                showInfo(selectedLocationId);
+            } else {
+                document.getElementById('content').innerHTML = '';
+            }
+        }
+        
+        
+
+        document.querySelectorAll('.timeline-item').forEach(item => {
+            item.addEventListener('click', () => setYear(item.dataset.year));
+        });
+
+        document.getElementById('modeToggle').addEventListener('click', toggleMode);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const timelineItems = document.querySelectorAll('.timeline-item');
+            timelineItems.forEach(item => {
+                item.style.display = 'none';
+            });
+            initMap();
+        });
+    </script>
+</body>
+</html>
